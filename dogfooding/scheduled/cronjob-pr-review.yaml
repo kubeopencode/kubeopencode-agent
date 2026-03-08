@@ -1,0 +1,140 @@
+# Copyright Contributors to the KubeOpenCode project
+# CronJob that reviews open PRs without the ai-reviewed label.
+#
+# This CronJob runs daily at 7:00 AM UTC and:
+# 1. Queries GitHub API for open PRs without the "ai-reviewed" label
+# 2. Creates a KubeOpenCode Task for each PR to perform code review
+#
+# Prerequisites:
+# 1. base resources applied (Agent, ConfigMaps, Secrets)
+# 2. RBAC permissions for cross-namespace Task creation
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pr-review
+  labels:
+    app.kubernetes.io/name: kubeopencode
+    app.kubernetes.io/component: scheduled
+    app.kubernetes.io/part-of: dogfooding
+spec:
+  # Daily at 7:00 AM UTC
+  schedule: "0 7 * * *"
+  # Keep last 3 successful and 3 failed jobs for debugging
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  # Concurrency policy: don't start new if previous is still running
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kubeopencode
+        app.kubernetes.io/component: scheduled
+        app.kubernetes.io/part-of: dogfooding
+    spec:
+      # Allow enough time to query PRs and create Tasks
+      activeDeadlineSeconds: 120
+      template:
+        spec:
+          serviceAccountName: kubeopencode-task-scheduler
+          restartPolicy: OnFailure
+          containers:
+            - name: create-review-tasks
+              image: bitnami/kubectl:latest
+              command: [sh, -c]
+              args:
+                - |
+                  # Fetch open PRs without the "ai-reviewed" label from kubeopencode/kubeopencode
+                  PRS=$(curl -s "https://api.github.com/repos/kubeopencode/kubeopencode/pulls?state=open&per_page=100" \
+                    | grep -o '"number":[0-9]*\|"title":"[^"]*"\|"name":"ai-reviewed"' \
+                    | awk '
+                      /^"number":/ {
+                        if (num != "" && !has_label) print num
+                        num = substr($0, 10)
+                        has_label = 0
+                      }
+                      /^"name":"ai-reviewed"/ { has_label = 1 }
+                      END { if (num != "" && !has_label) print num }
+                    ')
+
+                  if [ -z "$PRS" ]; then
+                    echo "No open PRs without ai-reviewed label found."
+                    exit 0
+                  fi
+
+                  echo "Found PRs to review: $PRS"
+
+                  for PR_NUMBER in $PRS; do
+                    echo "Creating review Task for PR #${PR_NUMBER}..."
+                    kubectl create -f - <<EOF
+                  apiVersion: kubeopencode.io/v1alpha1
+                  kind: Task
+                  metadata:
+                    generateName: pr-review-${PR_NUMBER}-
+                    namespace: kubeopencode-dogfooding
+                    labels:
+                      app.kubernetes.io/name: kubeopencode
+                      app.kubernetes.io/component: pr-review
+                      app.kubernetes.io/part-of: dogfooding
+                      kubeopencode.io/scheduled: "true"
+                      kubeopencode.io/pr-number: "${PR_NUMBER}"
+                    annotations:
+                      kubeopencode.io/triggered-by: "CronJob/pr-review"
+                  spec:
+                    agentRef:
+                      name: bot
+                      namespace: kubeopencode-dogfooding
+                    description: |
+                      # Code Review Task for PR #${PR_NUMBER}
+
+                      ## Objective
+
+                      Perform a thorough code review on pull request #${PR_NUMBER} in the
+                      kubeopencode/kubeopencode repository.
+
+                      ## Instructions
+
+                      1. Navigate to the cloned \`kubeopencode\` directory
+                      2. Fetch the PR details:
+                         \`\`\`bash
+                         gh pr view ${PR_NUMBER} --json title,body,files,additions,deletions,commits
+                         \`\`\`
+                      3. Check out the PR branch:
+                         \`\`\`bash
+                         gh pr checkout ${PR_NUMBER}
+                         \`\`\`
+                      4. Review the diff:
+                         \`\`\`bash
+                         gh pr diff ${PR_NUMBER}
+                         \`\`\`
+                      5. Perform the code review focusing on:
+                         - Code correctness and potential bugs
+                         - Error handling and edge cases
+                         - Code style and consistency
+                         - Security concerns
+                         - Performance implications
+                         - Test coverage
+                      6. Submit the review as inline PR review comments using the GitHub API:
+                         - Attach comments to specific lines in the diff
+                         - Provide constructive feedback with code suggestions when applicable
+                         - Include an overall summary
+                      7. After submitting the review, add the \`ai-reviewed\` label:
+                         \`\`\`bash
+                         gh pr edit ${PR_NUMBER} --add-label "ai-reviewed"
+                         \`\`\`
+
+                      ## Important
+
+                      - Be constructive and specific in feedback
+                      - Suggest code improvements with examples
+                      - Do NOT approve or request changes, use COMMENT event only
+                      - Always add the \`ai-reviewed\` label after review
+                      - Write review comments in English
+
+                      ## Context
+
+                      - Trigger: Scheduled CronJob (daily at 7:00 UTC)
+                      - Repository: kubeopencode/kubeopencode
+                      - PR: #${PR_NUMBER}
+                  EOF
+                    echo "Task created for PR #${PR_NUMBER}"
+                  done

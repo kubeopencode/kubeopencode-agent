@@ -11,3 +11,4 @@ resources:
   - rbac.yaml
   - cronjob-tiny-refactor.yaml
   - cronjob-opencode-update.yaml
+  - cronjob-pr-review.yaml
