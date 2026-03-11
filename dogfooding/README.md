@@ -4,209 +4,127 @@ This directory contains resources for running KubeOpenCode in a dogfooding envir
 
 ## Architecture
 
-```
-GitHub (kubeopencode/kubeopencode)
-    │
-    │ Webhook events (PR opened, issue comments, etc.)
-    │
-    ▼
-smee.io (https://smee.io/YOUR_CHANNEL_ID)
-    │
-    │ Forwards webhooks (trusted SSL)
-    │
-    ▼
-smee-client (Pod in kubeopencode-system)
-    │
-    │ HTTP to internal service
-    │
-    ▼
-kubeopencode-webhook (Service in kubeopencode-system)
-    │
-    │ Matches rules, creates Tasks
-    │
-    ▼
-WebhookTrigger (kubeopencode-dogfooding/github)
-    │
-    ▼
-Task → Job → Agent Pod
-```
-
-## Why smee.io?
-
-GitHub webhooks require endpoints with SSL certificates signed by trusted public CAs. OpenShift's default ingress uses self-signed certificates, which GitHub rejects with:
+A single unified `dogfooding` agent handles all tasks. Its capabilities are defined by `.claude/skills/` in the repo itself — the agent discovers skills automatically at runtime via the `mountPath: .` context.
 
 ```
-tls: failed to verify certificate: x509: certificate signed by unknown authority
+GitHub / Slack / CronJobs
+    │
+    │ Events trigger Task creation
+    │
+    ▼
+Task (kubeopencode-dogfooding namespace)
+    │
+    │ agentRef: dogfooding
+    │
+    ▼
+Agent Pod (unified dogfooding agent)
+    │
+    │ Skills auto-discovered from .claude/skills/
+    │
+    ▼
+Responds via GitHub API / Slack CLI / Creates PRs
 ```
 
-[smee.io](https://smee.io) is GitHub's recommended solution for development/testing. It provides a public HTTPS endpoint with trusted certificates and forwards webhooks to your internal services.
+### Skills
+
+| Skill | Trigger | Description |
+|-------|---------|-------------|
+| `github-respond` | GitHub @mention | Answer questions, make code changes, create PRs |
+| `pr-review` | CronJob (daily) | Review open PRs for bugs, security, style |
+| `tiny-refactor` | CronJob (every 3 days) | Static analysis + one safe refactoring |
+| `opencode-update` | CronJob (weekly) | Check for new OpenCode releases, update Dockerfile |
+| `slack-respond` | Slack @mention/DM | Respond to Slack messages via slack-cli |
 
 ## Directory Structure
 
 ```
-deploy/dogfooding/
-├── README.md                 # This file
-├── base/                     # Resources for kubeopencode-dogfooding namespace
+dogfooding/
+├── base/                              # Resources for kubeopencode-dogfooding namespace
 │   ├── kustomization.yaml
 │   ├── namespace.yaml
 │   ├── rbac.yaml
-│   ├── secrets.yaml          # Contains github-webhook-secret
-│   ├── agent-bot.yaml        # Read-only Agent configuration
-│   ├── agent-dev.yaml        # Dev Agent with write permissions
-│   ├── agent-refactor.yaml   # Automated refactoring Agent
-│   └── context-*.yaml        # Context resources (instructions for agents)
-├── github/                   # Argo Events resources (webhook-triggered)
-│   ├── kustomization.yaml
-│   ├── eventbus.yaml
-│   ├── eventsource-*.yaml    # GitHub webhook listeners
-│   └── sensor-*.yaml         # Event-to-Task triggers
-├── scheduled/                # Kubernetes CronJob resources (cron-triggered)
+│   ├── secrets.yaml                   # Git, GitHub App, OpenCode, Slack credentials
+│   ├── kubeopencodeconfig.yaml        # Cluster-wide KubeOpenCode settings
+│   └── agent-dogfooding.yaml          # Unified agent (gemini-3.1-pro, maxConcurrent: 3)
+├── scheduled/                         # CronJob resources (kubeopencode-scheduled namespace)
 │   ├── kustomization.yaml
 │   ├── namespace.yaml
 │   ├── rbac.yaml
-│   ├── cronjob-tiny-refactor.yaml       # Daily refactoring CronJob
-│   └── cronjob-opencode-update.yaml     # Weekly OpenCode update CronJob
-└── examples/                 # Example Tasks
+│   ├── cronjob-pr-review.yaml         # Daily PR review
+│   ├── cronjob-tiny-refactor.yaml     # Refactoring every 3 days
+│   └── cronjob-opencode-update.yaml   # Weekly OpenCode version check
+└── slack/                             # Slack integration (kubeopencode-slack namespace)
+    ├── kustomization.yaml
+    ├── namespace.yaml
+    ├── secrets.yaml                   # Slack Socket Mode credentials
+    └── socket-mode-gateway.yaml       # Python gateway + RBAC + Deployment
 ```
 
 ## Setup
 
 ### Prerequisites
 
-1. KubeOpenCode installed in `kubeopencode-system` namespace with webhook enabled:
-   ```bash
-   helm install kubeopencode ./charts/kubeopencode \
-     --namespace kubeopencode-system \
-     --set webhook.enabled=true
-   ```
+1. KubeOpenCode operator installed in the cluster
+2. A GitHub App with write permissions configured for the repository
 
-2. A GitHub App configured for the repository (see [GitHub App Setup](#github-app-setup))
-
-### Deploy Dogfooding Resources
+### Deploy
 
 ```bash
-# Apply base resources (kubeopencode-dogfooding namespace)
-kubectl apply -k deploy/dogfooding/base
+# Apply base resources (agent, RBAC, namespace)
+kubectl apply -k dogfooding/base
 
-# Apply system resources (kubeopencode-system namespace)
-kubectl apply -k deploy/dogfooding/system
+# Apply scheduled CronJobs
+kubectl apply -k dogfooding/scheduled
 
-# Apply WebhookTrigger
-kubectl apply -f deploy/dogfooding/resources/webhooktrigger-github.yaml
+# Apply Slack gateway
+kubectl apply -k dogfooding/slack
+
+# Verify agent creation
+kubectl get agents -n kubeopencode-dogfooding
 ```
 
-### Verify Deployment
+## Agent Configuration
+
+The unified `dogfooding` agent is configured with:
+
+| Setting | Value |
+|---------|-------|
+| **Model** | gemini-3.1-pro (most capable) |
+| **Small Model** | gemini-3-flash |
+| **Max Concurrent Tasks** | 3 (handles parallel GitHub + scheduled + Slack) |
+| **Rate Limit** | 200 task starts per 24 hours |
+| **GitHub Credentials** | github-dev-credentials (write access) |
+
+### Contexts
+
+| Context | Type | Mount Path | Description |
+|---------|------|------------|-------------|
+| `dogfooding` | Git | `.` (workspace root) | This repo — `.claude/skills/` auto-discovered |
+| `kubeopencode` | Git | `kubeopencode` | KubeOpenCode source code for review/refactoring |
+
+## Scheduled Tasks (CronJobs)
+
+CronJobs run in `kubeopencode-scheduled` namespace and create Tasks in `kubeopencode-dogfooding` namespace via cross-namespace RBAC.
+
+| CronJob | Schedule | Description |
+|---------|----------|-------------|
+| `pr-review` | Daily at 7:00 UTC | Reviews open PRs without `ai-reviewed` label |
+| `tiny-refactor` | Every 3 days at 8:00 UTC | One small safe refactoring in kubeopencode |
+| `opencode-update` | Weekly Monday at 9:00 UTC | Checks for new OpenCode releases |
+
+### Manual Trigger (Testing)
 
 ```bash
-# Check smee-client is running
-kubectl get pods -n kubeopencode-system -l app.kubernetes.io/name=smee-client
+# Create a one-off Job from a CronJob
+kubectl create job --from=cronjob/tiny-refactor tiny-refactor-manual -n kubeopencode-scheduled
 
-# Check smee-client logs
-kubectl logs -n kubeopencode-system -l app.kubernetes.io/name=smee-client
-
-# Check webhook server registered the trigger
-kubectl logs -n kubeopencode-system -l app.kubernetes.io/component=webhook | grep "Registered"
+# Check created Tasks
+kubectl get tasks -n kubeopencode-dogfooding -l kubeopencode.io/scheduled=true
 ```
 
-## GitHub App Setup
+## Slack Integration
 
-### 1. Create a GitHub App
-
-1. Go to GitHub Settings → Developer settings → GitHub Apps → New GitHub App
-2. Configure:
-   - **App name**: `kubeopencode-bot`
-   - **Homepage URL**: `https://github.com/kubeopencode/kubeopencode`
-   - **Webhook URL**: `https://smee.io/YOUR_CHANNEL_ID` (from your smee.io channel)
-   - **Webhook secret**: Same as `hmacKey` in `github-webhook-secret`
-   - **Permissions**:
-     - Repository: Contents (Read & Write), Issues (Read & Write), Pull requests (Read & Write)
-   - **Subscribe to events**: Issue comment, Pull request
-
-### 2. Install the App
-
-Install the GitHub App on the `kubeopencode/kubeopencode` repository.
-
-### 3. Configure Secrets
-
-Create the webhook secret:
-```bash
-kubectl create secret generic github-webhook-secret \
-  --namespace kubeopencode-dogfooding \
-  --from-literal=hmacKey=<your-webhook-secret>
-```
-
-## Changing the smee.io Channel
-
-If you need to create a new smee.io channel:
-
-1. Go to https://smee.io/ and click "Start a new channel"
-2. Update `system/deployment-smee-client.yaml` with the new URL
-3. Update the GitHub App's Webhook URL
-4. Re-apply the deployment:
-   ```bash
-   kubectl apply -k deploy/dogfooding/system
-   ```
-
-## WebhookTrigger Rules
-
-The `github` WebhookTrigger in `resources/webhooktrigger-github.yaml` defines:
-
-| Rule | Event | Trigger Condition |
-|------|-------|-------------------|
-| `pr-opened` | `pull_request` | PR is opened |
-| `comment-privileged` | `issue_comment` | `@kubeopencode-bot` mention from OWNER/MEMBER/CONTRIBUTOR/COLLABORATOR |
-| `comment-unprivileged` | `issue_comment` | `@kubeopencode-bot` mention from other users |
-
-## Troubleshooting
-
-### Webhook not triggering
-
-1. **Check smee-client logs**:
-   ```bash
-   kubectl logs -n kubeopencode-system -l app.kubernetes.io/name=smee-client -f
-   ```
-
-2. **Check webhook server logs**:
-   ```bash
-   kubectl logs -n kubeopencode-system -l app.kubernetes.io/component=webhook -f
-   ```
-
-3. **Check GitHub App delivery history**:
-   Go to GitHub App settings → Advanced → Recent Deliveries
-
-### Authentication failed
-
-If you see `Authentication failed` in webhook logs:
-- Verify the `hmacKey` in `github-webhook-secret` matches the GitHub App's webhook secret
-- Ensure the secret is in the correct namespace (`kubeopencode-dogfooding`)
-
-### No Tasks created
-
-Check the WebhookTrigger status:
-```bash
-kubectl get webhooktrigger -n kubeopencode-dogfooding github -o yaml
-```
-
-Check if the filter conditions match your event.
-
-## Production Considerations
-
-For production environments, consider:
-
-1. **Use a trusted SSL certificate** instead of smee.io:
-   - Configure Let's Encrypt with cert-manager
-   - Or use a commercial SSL certificate
-
-2. **Use a dedicated Route/Ingress** with proper TLS:
-   ```yaml
-   spec:
-     tls:
-       termination: edge
-       certificate: <your-cert>
-       key: <your-key>
-   ```
-
-3. **Secure the webhook secret** using external secret management (e.g., Vault, Sealed Secrets)
+The Slack Socket Mode gateway runs in `kubeopencode-slack` namespace. When a user @mentions or DMs the bot, the gateway creates a KubeOpenCode Task with Slack context (channel, thread). The agent responds using `slack-cli send`.
 
 ## Argo Workflow Integration
 
@@ -225,7 +143,6 @@ AI agents can write results to Task annotations using `kubectl annotate`. Argo W
 
 **Agent writes results:**
 ```bash
-# In the agent's task execution
 kubectl annotate task $TASK_NAME -n $TASK_NAMESPACE \
   kubeopencode.io/pr-url="https://github.com/org/repo/pull/123" \
   kubeopencode.io/summary="Fixed the login bug"
@@ -242,182 +159,3 @@ outputs:
       valueFrom:
         jqFilter: '.metadata.annotations["kubeopencode.io/summary"]'
 ```
-
-### Example: AI Pipeline with Annotation-Based Output
-
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Workflow
-metadata:
-  generateName: ai-pipeline-
-spec:
-  entrypoint: main
-  templates:
-    - name: main
-      dag:
-        tasks:
-          - name: run-ai-task
-            template: execute-task
-
-          - name: use-result
-            template: process-result
-            dependencies: [run-ai-task]
-            arguments:
-              parameters:
-                - name: pr-url
-                  value: "{{tasks.run-ai-task.outputs.parameters.pr-url}}"
-                - name: summary
-                  value: "{{tasks.run-ai-task.outputs.parameters.summary}}"
-
-    - name: execute-task
-      resource:
-        action: create
-        manifest: |
-          apiVersion: kubeopencode.io/v1alpha1
-          kind: Task
-          metadata:
-            generateName: task-
-            namespace: kubeopencode-dogfooding
-          spec:
-            agentRef:
-              name: opencode-agent
-            description: |
-              Create a PR with the requested changes.
-              After completion, save results to Task annotations:
-              kubectl annotate task $TASK_NAME -n $TASK_NAMESPACE \
-                kubeopencode.io/pr-url="<pr-url>" \
-                kubeopencode.io/summary="<summary>"
-        successCondition: status.phase == Completed
-        failureCondition: status.phase == Failed
-      outputs:
-        parameters:
-          - name: pr-url
-            valueFrom:
-              jqFilter: '.metadata.annotations["kubeopencode.io/pr-url"] // "N/A"'
-          - name: summary
-            valueFrom:
-              jqFilter: '.metadata.annotations["kubeopencode.io/summary"] // "No summary"'
-
-    - name: process-result
-      inputs:
-        parameters:
-          - name: pr-url
-          - name: summary
-      container:
-        image: alpine
-        command: [sh, -c]
-        args:
-          - |
-            echo "PR URL: {{inputs.parameters.pr-url}}"
-            echo "Summary: {{inputs.parameters.summary}}"
-```
-
-### Extraction Methods
-
-Argo Workflows supports two methods for extracting annotation values:
-
-**JQ Filter (Recommended):**
-```yaml
-valueFrom:
-  jqFilter: '.metadata.annotations["kubeopencode.io/result"]'
-  # With default value:
-  jqFilter: '.metadata.annotations["kubeopencode.io/result"] // "default"'
-```
-
-**JSONPath:**
-```yaml
-valueFrom:
-  jsonPath: '{.metadata.annotations.kubeopencode\.io/result}'
-```
-
-JQ is recommended for annotations because:
-- Handles special characters in annotation keys more easily
-- Supports default values with `// "default"` syntax
-- Can parse JSON values: `.metadata.annotations["key"] | fromjson | .field`
-
-### Key Configuration
-
-| Field | Purpose |
-|-------|---------|
-| `successCondition: status.phase == Completed` | Workflow step succeeds when Task completes |
-| `failureCondition: status.phase == Failed` | Workflow step fails when Task fails |
-| `outputs.parameters[].valueFrom.jqFilter` | Extract values from Task annotations |
-| `{{tasks.<name>.outputs.parameters.<key>}}` | Reference outputs in subsequent steps |
-
-### Important Notes
-
-1. **RBAC Requirements**: The agent's ServiceAccount needs permission to annotate Tasks:
-   ```yaml
-   - apiGroups: ["kubeopencode.io"]
-     resources: ["tasks"]
-     verbs: ["get", "patch"]
-   ```
-
-2. **Annotation Size Limit**: Kubernetes annotations have a 256KB total limit per resource, which is much larger than the previous 4KB termination message limit.
-
-3. **JSON in Annotations**: For structured data, store JSON in a single annotation:
-   ```bash
-   kubectl annotate task $TASK_NAME \
-     kubeopencode.io/result='{"pr_url":"...","files_changed":5}'
-   ```
-   Extract with JQ:
-   ```yaml
-   jqFilter: '.metadata.annotations["kubeopencode.io/result"] | fromjson | .pr_url'
-   ```
-
-4. **Polling Mechanism**: Argo polls the Task status periodically (not event-driven). Consider setting a `timeout` on the resource template.
-
-5. **Task Cleanup**: Completed Tasks remain in the cluster. Configure `KubeOpenCodeConfig.spec.cleanup` or use Argo's `ttlStrategy`.
-
-## Scheduled Tasks (CronJob)
-
-KubeOpenCode includes scheduled CronJobs that create KubeOpenCode Tasks on a cron schedule. No external workflow engine is required — native Kubernetes CronJobs handle scheduling, and KubeOpenCode manages Task lifecycle.
-
-### Available CronJobs
-
-| CronJob | Schedule | Description |
-|---------|----------|-------------|
-| `tiny-refactor` | Daily at 8:00 UTC | Identifies and implements one small refactoring |
-| `opencode-update` | Weekly Monday at 9:00 UTC | Checks for new OpenCode releases and creates update PR |
-
-### Deploy Scheduled Resources
-
-```bash
-# Step 1: Apply base resources (includes refactor agent)
-kubectl apply -k deploy/dogfooding/base
-
-# Step 2: Apply scheduled resources
-kubectl apply -k deploy/dogfooding/scheduled
-
-# Step 3: Verify CronJobs are created
-kubectl get cronjobs -n kubeopencode-scheduled
-```
-
-### Manual Trigger (Testing)
-
-```bash
-# Create a one-off Job from the CronJob
-kubectl create job --from=cronjob/tiny-refactor tiny-refactor-manual -n kubeopencode-scheduled
-
-# Check the Job status
-kubectl get jobs -n kubeopencode-scheduled
-
-# Check the created Task
-kubectl get tasks -n kubeopencode-dogfooding -l kubeopencode.io/scheduled=true
-```
-
-### CronJob Details
-
-| Setting | Value | Description |
-|---------|-------|-------------|
-| Concurrency | `Forbid` | Skip if previous Job is still active |
-| Job Timeout | 60s | CronJob only creates the Task, does not wait for completion |
-| Retention | 3 | Keep last 3 successful/failed Jobs |
-
-### Refactor Agent
-
-The `refactor` agent is configured with:
-- **Model**: Gemini 3 Flash (balanced speed/quality)
-- **Concurrency**: 1 task at a time
-- **Rate Limit**: Max 2 task starts per day
-- **Credentials**: Same as dev agent (GitHub write access)

@@ -2,20 +2,27 @@
 
 Deployment configurations for the [KubeOpenCode](https://github.com/kubeopencode/kubeopencode) dogfooding environment, where KubeOpenCode is used to automate tasks on its own repository.
 
-## Background
+## Repo as Agent
 
-This repository was extracted from `kubeopencode/kubeopencode`'s `deploy/dogfooding/` directory ([commit b5b20bc](https://github.com/kubeopencode/kubeopencode/commit/b5b20bc)) for:
+This repo **is** the agent. The `.claude/skills/` directory defines all capabilities. Adding a new capability = adding a SKILL.md file via PR. No more remembering which agent does what.
 
-- **Security** — avoid plaintext secrets in the main project's git history
-- **Separation of concerns** — deployment-specific configs don't belong in project source
+```
+.claude/
+├── CLAUDE.md                      # Base agent identity & shared rules
+└── skills/
+    ├── github-respond/SKILL.md    # GitHub @mention handling (Q&A + code changes)
+    ├── pr-review/SKILL.md         # Automated PR code review
+    ├── tiny-refactor/SKILL.md     # Automated code refactoring
+    ├── opencode-update/SKILL.md   # Dependency version checking
+    └── slack-respond/SKILL.md     # Slack bot responses
+```
 
 ## Structure
 
 ```
 dogfooding/
-├── base/           # Core resources (agents, contexts, RBAC, namespace)
-├── github/         # GitHub webhook integration (Argo Events, smee-client)
-├── scheduled/      # CronJobs (opencode update, tiny refactor)
+├── base/           # Core resources (unified agent, RBAC, namespace)
+├── scheduled/      # CronJobs (PR review, tiny refactor, opencode update)
 └── slack/          # Slack bot integration (socket-mode gateway)
 ```
 
