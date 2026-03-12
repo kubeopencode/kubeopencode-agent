@@ -164,6 +164,7 @@ spec:
 |---------|-------|
 | **Model** | gemini-3.1-pro (most capable) |
 | **Small Model** | gemini-3-flash |
+| **General Subagent** | gemini-3-flash-preview (faster/cheaper for subtasks) |
 | **Max Concurrent Tasks** | 3 (handles parallel GitHub + scheduled + Slack) |
 | **Rate Limit** | 200 task starts per 24 hours |
 | **GitHub Credentials** | github-dev-credentials (write access) |

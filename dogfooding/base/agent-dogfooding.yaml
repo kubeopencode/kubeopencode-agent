@@ -23,7 +23,12 @@ spec:
       "model": "opencode/gemini-3.1-pro",
       "small_model": "opencode/gemini-3-flash",
       "share": "disabled",
-      "autoupdate": false
+      "autoupdate": false,
+      "agent": {
+        "general": {
+          "model": "opencode/gemini-3-flash-preview"
+        }
+      }
     }
   contexts:
     # Dogfooding repo at workspace root - AGENTS.md and .opencode/skills/ auto-discovered
