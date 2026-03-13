@@ -43,7 +43,7 @@ data:
     SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
     TASK_NAMESPACE = os.environ.get("TASK_NAMESPACE", "kubeopencode-dogfooding")
     AGENT_NAME = os.environ.get("AGENT_NAME", "dev-agent")
-    AGENT_NAMESPACE = os.environ.get("AGENT_NAMESPACE", "kubeopencode-dogfooding")
+    # Agent must be in the same namespace as Task (no cross-namespace support)
 
     if not SLACK_APP_TOKEN or not SLACK_BOT_TOKEN:
         logger.error("SLACK_APP_TOKEN and SLACK_BOT_TOKEN are required")
@@ -110,8 +110,7 @@ data:
             },
             "spec": {
                 "agentRef": {
-                    "name": AGENT_NAME,
-                    "namespace": AGENT_NAMESPACE
+                    "name": AGENT_NAME
                 },
                 "description": full_description
             }
@@ -265,11 +264,9 @@ spec:
                   name: slack-socket-mode-creds
                   key: bot-token
             - name: TASK_NAMESPACE
-              value: "kubeopencode-slack"
+              value: "kubeopencode-dogfooding"
             - name: AGENT_NAME
               value: "dogfooding"
-            - name: AGENT_NAMESPACE
-              value: "kubeopencode-dogfooding"
           volumeMounts:
             - name: gateway-script
               mountPath: /app

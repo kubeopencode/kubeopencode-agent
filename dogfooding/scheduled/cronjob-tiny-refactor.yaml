@@ -62,7 +62,6 @@ spec:
                   spec:
                     agentRef:
                       name: dogfooding
-                      namespace: kubeopencode-dogfooding
                     description: |
                       # Daily Tiny Refactor Task
 

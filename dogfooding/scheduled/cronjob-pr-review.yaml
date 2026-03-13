@@ -82,7 +82,6 @@ spec:
                   spec:
                     agentRef:
                       name: dogfooding
-                      namespace: kubeopencode-dogfooding
                     description: |
                       # Code Review Task for PR #${PR_NUMBER}
 
