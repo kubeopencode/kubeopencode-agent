@@ -27,7 +27,7 @@ spec:
       "autoupdate": false,
       "agent": {
         "general": {
-          "model": "opencode/gemini-3-flash-preview"
+          "model": "opencode/gemini-3-flash"
         }
       }
     }
