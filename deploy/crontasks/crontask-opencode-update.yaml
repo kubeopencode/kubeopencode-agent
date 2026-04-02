@@ -1,0 +1,31 @@
+# Copyright Contributors to the KubeOpenCode project
+# CronTask that checks for OpenCode updates and creates a PR if needed.
+# Detailed procedure: workflows/weekly-opencode-update.md (updated via git commit)
+apiVersion: kubeopencode.io/v1alpha1
+kind: CronTask
+metadata:
+  name: opencode-update
+  labels:
+    app.kubernetes.io/name: kubeopencode
+    app.kubernetes.io/component: scheduled
+    app.kubernetes.io/part-of: kubeopencode-agent
+spec:
+  # Weekly on Monday at 9:00 AM UTC
+  schedule: "0 9 * * 1"
+  concurrencyPolicy: Forbid
+  maxRetainedTasks: 5
+  taskTemplate:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kubeopencode
+        app.kubernetes.io/component: dependency-update
+        app.kubernetes.io/part-of: kubeopencode-agent
+        kubeopencode.io/scheduled: "true"
+    spec:
+      agentRef:
+        name: kubeopencode-agent
+      description: |
+        Follow the workflow defined in `workflows/weekly-opencode-update.md`.
+
+        Check for new OpenCode releases and update the Dockerfile version.
+        Repository: kubeopencode/kubeopencode

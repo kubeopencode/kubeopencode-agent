@@ -1,0 +1,42 @@
+# Copyright Contributors to the KubeOpenCode project
+# Unified agent configuration - capabilities defined by .claude/skills/ in the repo.
+# Adding a new capability = adding a SKILL.md file via PR.
+#
+# Inherits images, credentials, contexts, workspaceDir, and serviceAccountName
+# from the kubeopencode-base AgentTemplate. Only agent-specific settings here.
+apiVersion: kubeopencode.io/v1alpha1
+kind: Agent
+metadata:
+  name: kubeopencode-agent
+spec:
+  templateRef:
+    name: kubeopencode-base
+  profile: "KubeOpenCode agent — PR review, refactoring, dependency updates, GitHub and Slack responses, community operations"
+  # Handles parallel tasks (GitHub event + scheduled + Slack)
+  maxConcurrentTasks: 3
+  # Rate limiting: max 200 tasks per 24 hours
+  quota:
+    maxTaskStarts: 200
+    windowSeconds: 86400
+  # Auto-suspend after 30 minutes idle, auto-resume when a new Task arrives.
+  # Most triggers are CronJobs (daily/3-day/weekly), so the agent is idle most of the time.
+  standby:
+    idleTimeout: "30m"
+  # Session persistence: conversation history survives pod restarts
+  persistence:
+    sessions:
+      size: "1Gi"
+  # OpenCode configuration using Google Gemini 3.1 Pro
+  config: |
+    {
+      "$schema": "https://opencode.ai/config.json",
+      "model": "opencode/gemini-3.1-pro",
+      "small_model": "opencode/gemini-3-flash",
+      "share": "disabled",
+      "autoupdate": false,
+      "agent": {
+        "general": {
+          "model": "opencode/gemini-3-flash"
+        }
+      }
+    }

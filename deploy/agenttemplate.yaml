@@ -1,0 +1,41 @@
+# Copyright Contributors to the KubeOpenCode project
+# Reusable base template — shared infrastructure config (images, credentials, contexts).
+# Individual Agents reference this template and override only what differs.
+apiVersion: kubeopencode.io/v1alpha1
+kind: AgentTemplate
+metadata:
+  name: kubeopencode-base
+spec:
+  agentImage: quay.io/kubeopencode/kubeopencode-agent-opencode:latest
+  executorImage: quay.io/kubeopencode/kubeopencode-agent-devbox:latest
+  workspaceDir: /workspace
+  serviceAccountName: kubeopencode-agent
+  contexts:
+    # Agent repo at workspace root - AGENTS.md, skills, workflows auto-discovered
+    # Reference repos (kubeopencode, skills, etc.) are managed via repos/repos.yaml
+    # and cloned on demand by sync-repos.sh — no separate git context needed.
+    - name: kubeopencode-agent
+      description: "Agent repo with skills, workflows, and instructions"
+      type: Git
+      git:
+        repository: https://github.com/kubeopencode/kubeopencode-agent.git
+        ref: main
+      mountPath: .
+  credentials:
+    # Mount entire secret - all keys become env vars automatically
+    - name: git
+      secretRef:
+        name: git-settings
+    - name: opencode
+      secretRef:
+        name: opencode-credentials
+    # GitHub App credentials (write access)
+    - name: github-app
+      secretRef:
+        name: github-dev-credentials
+    # Slack Bot Token
+    - name: slack
+      secretRef:
+        name: slack-creds
+        key: bot-token
+      env: SLACK_BOT_TOKEN

@@ -7,7 +7,7 @@
 #
 # Prerequisites:
 # 1. Create slack-socket-mode-creds secret (see deployment-socket-mode-gateway.yaml)
-# 2. Apply this file: kubectl apply -f socket-mode-gateway-no-build.yaml -n kubeopencode-slack
+# 2. Apply via kustomize: kubectl apply -k deploy/
 #
 ---
 apiVersion: v1
@@ -41,7 +41,7 @@ data:
     # Configuration
     SLACK_APP_TOKEN = os.environ.get("SLACK_APP_TOKEN")
     SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
-    TASK_NAMESPACE = os.environ.get("TASK_NAMESPACE", "kubeopencode-dogfooding")
+    TASK_NAMESPACE = os.environ.get("TASK_NAMESPACE", "kubeopencode-agent")
     AGENT_NAME = os.environ.get("AGENT_NAME", "dev-agent")
     # Agent must be in the same namespace as Task (no cross-namespace support)
 
@@ -198,33 +198,7 @@ data:
         handler = SocketModeHandler(app, SLACK_APP_TOKEN)
         handler.start()
 ---
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: slack-socket-mode-gateway
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: slack-socket-mode-gateway
-rules:
-  - apiGroups: ["kubeopencode.io"]
-    resources: ["tasks"]
-    verbs: ["create", "get", "list", "watch"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: slack-socket-mode-gateway
-subjects:
-  - kind: ServiceAccount
-    name: slack-socket-mode-gateway
-    namespace: kubeopencode-slack
-roleRef:
-  kind: ClusterRole
-  name: slack-socket-mode-gateway
-  apiGroup: rbac.authorization.k8s.io
----
+# ServiceAccount and RBAC are defined in rbac.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -264,9 +238,9 @@ spec:
                   name: slack-socket-mode-creds
                   key: bot-token
             - name: TASK_NAMESPACE
-              value: "kubeopencode-dogfooding"
+              value: "kubeopencode-agent"
             - name: AGENT_NAME
-              value: "dogfooding"
+              value: "kubeopencode-agent"
           volumeMounts:
             - name: gateway-script
               mountPath: /app

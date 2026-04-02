@@ -1,0 +1,25 @@
+# KubeOpenCode Related Repositories
+#
+# All repos listed here are cloned as READ-ONLY shallow copies under repos/.
+# repos/ is git-ignored — these are local reference copies for code search and analysis.
+#
+# When to prefer local repos/ over GitHub CLI API:
+#   - Code search across multiple files or repos (grep, ast analysis)
+#   - Reading full file contents or directory structures
+#   - Dependency tracing (go.mod, go.sum, import analysis)
+#   - Complex PR review requiring cross-file context
+#
+# For simple metadata queries (issue counts, PR status), prefer GitHub API.
+
+repos:
+
+  # ============================================================
+  # Core — KubeOpenCode platform repos
+  # ============================================================
+
+  core:
+    kubeopencode:
+      - repo: kubeopencode/kubeopencode
+        description: KubeOpenCode platform — operator, CRDs, controllers
+      - repo: kubeopencode/skills
+        description: Community skill library for KubeOpenCode agents

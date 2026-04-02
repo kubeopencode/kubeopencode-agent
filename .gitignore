@@ -7,6 +7,15 @@
 # Override global gitignore to track CLAUDE.md
 !CLAUDE.md
 
+# Intermediate artifacts
+.output/
+
+# Writable workspaces (if used in future)
+workspace/
+
+# Reference repo clones (repos.yaml and sync-repos.sh are tracked)
+repos/*/
+
 # Secrets
 *.pem
 *.key

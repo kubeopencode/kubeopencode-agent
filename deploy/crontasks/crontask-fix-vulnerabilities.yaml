@@ -1,0 +1,103 @@
+# Copyright Contributors to the KubeOpenCode project
+# CronTask that checks Dependabot alerts and fixes vulnerabilities.
+#
+# Runs weekly on Wednesday at 6:00 AM UTC. The agent:
+# 1. Queries open Dependabot alerts via GitHub API
+# 2. Identifies vulnerable transitive dependencies
+# 3. Adds pnpm overrides to force-upgrade to patched versions
+# 4. Runs pnpm install to update lockfiles
+# 5. Commits and pushes directly to main
+apiVersion: kubeopencode.io/v1alpha1
+kind: CronTask
+metadata:
+  name: fix-vulnerabilities
+  labels:
+    app.kubernetes.io/name: kubeopencode
+    app.kubernetes.io/component: scheduled
+    app.kubernetes.io/part-of: kubeopencode-agent
+spec:
+  # Weekly on Wednesday at 6:00 AM UTC
+  schedule: "0 6 * * 3"
+  concurrencyPolicy: Forbid
+  maxRetainedTasks: 5
+  taskTemplate:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kubeopencode
+        app.kubernetes.io/component: security
+        app.kubernetes.io/part-of: kubeopencode-agent
+        kubeopencode.io/scheduled: "true"
+    spec:
+      agentRef:
+        name: kubeopencode-agent
+      description: |
+        # Fix Dependabot Vulnerabilities
+
+        ## Objective
+
+        Check open Dependabot alerts on kubeopencode/kubeopencode and fix them
+        by adding or updating pnpm overrides for vulnerable transitive dependencies.
+
+        ## Instructions
+
+        1. Navigate to the cloned `kubeopencode` directory
+
+        2. Query open Dependabot alerts:
+           ```bash
+           gh api repos/kubeopencode/kubeopencode/dependabot/alerts \
+             --jq '.[] | select(.state=="open") | {number, severity: .security_vulnerability.severity, package: .security_vulnerability.package.name, ecosystem: .security_vulnerability.package.ecosystem, patched: .security_vulnerability.first_patched_version.identifier, vulnerable_range: .security_vulnerability.vulnerable_range, summary: .security_advisory.summary}'
+           ```
+
+        3. If no open alerts, exit successfully with "No open Dependabot vulnerabilities found."
+
+        4. Group alerts by ecosystem:
+           - **npm** packages: fix via pnpm overrides in `ui/package.json` and/or `website/package.json`
+           - **go** packages: fix via `go get` and `go mod tidy`
+           - **other**: report but skip
+
+        5. For each npm vulnerability:
+           a. Check which subprojects use the package:
+              ```bash
+              cd ui && pnpm why <package-name> 2>&1
+              cd ../website && pnpm why <package-name> 2>&1
+              ```
+           b. If the package is a transitive dependency, add a pnpm override in the
+              relevant `package.json` under `pnpm.overrides`:
+              ```json
+              "pnpm": {
+                "overrides": {
+                  "<package-name>": ">=<patched-version>"
+                }
+              }
+              ```
+           c. If the package is a direct dependency, update the version directly
+           d. Run `pnpm install --no-frozen-lockfile` in the affected subproject
+           e. Verify the fix: `pnpm why <package-name>` should show the patched version
+
+        6. For each Go vulnerability:
+           a. Run `go get <module>@<patched-version>`
+           b. Run `go mod tidy`
+           c. Run `go mod vendor` if a vendor directory exists
+
+        7. Commit and push directly to main:
+           ```bash
+           git add -A
+           git commit -s -m "fix(deps): resolve Dependabot vulnerabilities
+
+           <list each fixed package and CVE>"
+           git push
+           ```
+
+        ## Important
+
+        - Only fix vulnerabilities that have a patched version available
+        - Do NOT modify code logic — only dependency versions and lockfiles
+        - Verify each fix with `pnpm why` or `go list -m` before committing
+        - If a fix breaks `pnpm install` or `go mod tidy`, revert that specific change and skip it
+        - Push directly to main (no PR needed for dependency overrides)
+
+        ## Context
+
+        - Trigger: CronTask (weekly on Wednesday at 6:00 UTC)
+        - Repository: kubeopencode/kubeopencode
+        - Alert source: https://github.com/kubeopencode/kubeopencode/security/dependabot

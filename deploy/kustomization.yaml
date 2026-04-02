@@ -1,0 +1,21 @@
+# Copyright Contributors to the KubeOpenCode project
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: kubeopencode-agent
+
+resources:
+  # Core
+  - namespace.yaml
+  - rbac.yaml
+  - secrets.yaml
+  - kubeopencodeconfig.yaml
+  - agenttemplate.yaml
+  - agent.yaml
+  # Scheduled tasks (CronTask — native KubeOpenCode scheduling)
+  - crontasks/crontask-pr-review.yaml
+  - crontasks/crontask-tiny-refactor.yaml
+  - crontasks/crontask-opencode-update.yaml
+  - crontasks/crontask-fix-vulnerabilities.yaml
+  # Slack integration
+  - socket-mode-gateway.yaml

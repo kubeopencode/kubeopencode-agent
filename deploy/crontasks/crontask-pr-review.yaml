@@ -1,0 +1,31 @@
+# Copyright Contributors to the KubeOpenCode project
+# CronTask that reviews open PRs without the ai-reviewed label.
+# Detailed procedure: workflows/daily-pr-review.md (updated via git commit)
+apiVersion: kubeopencode.io/v1alpha1
+kind: CronTask
+metadata:
+  name: pr-review
+  labels:
+    app.kubernetes.io/name: kubeopencode
+    app.kubernetes.io/component: scheduled
+    app.kubernetes.io/part-of: kubeopencode-agent
+spec:
+  # Daily at 7:00 AM UTC
+  schedule: "0 7 * * *"
+  concurrencyPolicy: Forbid
+  maxRetainedTasks: 5
+  taskTemplate:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kubeopencode
+        app.kubernetes.io/component: pr-review
+        app.kubernetes.io/part-of: kubeopencode-agent
+        kubeopencode.io/scheduled: "true"
+    spec:
+      agentRef:
+        name: kubeopencode-agent
+      description: |
+        Follow the workflow defined in `workflows/daily-pr-review.md`.
+
+        Review all open PRs without the `ai-reviewed` label in kubeopencode/kubeopencode.
+        Repository: kubeopencode/kubeopencode

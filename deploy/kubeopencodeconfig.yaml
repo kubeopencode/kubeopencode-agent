@@ -1,5 +1,5 @@
 # Copyright Contributors to the KubeOpenCode project
-# KubeOpenCodeConfig for dogfooding environment
+# KubeOpenCodeConfig for kubeopencode-agent
 # This is a cluster-scoped singleton resource
 apiVersion: kubeopencode.io/v1alpha1
 kind: KubeOpenCodeConfig
