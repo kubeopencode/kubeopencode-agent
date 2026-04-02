@@ -26,6 +26,3 @@ spec:
         name: kubeopencode-agent
       description: |
         Follow the workflow defined in `workflows/daily-pr-review.md`.
-
-        Review all open PRs without the `ai-reviewed` label in kubeopencode/kubeopencode.
-        Repository: kubeopencode/kubeopencode

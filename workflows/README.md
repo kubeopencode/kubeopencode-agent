@@ -19,7 +19,8 @@ Workflows are **user-triggered or scheduled** multi-phase processes. The user kn
 |----------|-------------|---------|
 | [daily-pr-review](daily-pr-review.md) | Review all open PRs without `ai-reviewed` label | CronTask daily / user request |
 | [periodic-tiny-refactor](periodic-tiny-refactor.md) | One small safe refactoring in kubeopencode | CronTask every 3 days / user request |
-| [weekly-opencode-update](weekly-opencode-update.md) | Check & update OpenCode Dockerfile version | CronTask weekly / user request |
+| [weekly-opencode-update](weekly-opencode-update.md) | Check & update OpenCode version in agents/Makefile | CronTask weekly / user request |
+| [weekly-fix-vulnerabilities](weekly-fix-vulnerabilities.md) | Fix open Dependabot alerts via pnpm overrides / go get | CronTask weekly / user request |
 
 Workflow files are the **single source of truth** for scheduled task procedures. CronTask descriptions reference workflow files instead of embedding instructions — updating a workflow only requires a git commit, not a `kubectl apply`.
 

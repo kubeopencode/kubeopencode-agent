@@ -26,6 +26,3 @@ spec:
         name: kubeopencode-agent
       description: |
         Follow the workflow defined in `workflows/weekly-opencode-update.md`.
-
-        Check for new OpenCode releases and update the version in agents/Makefile.
-        Repository: kubeopencode/kubeopencode

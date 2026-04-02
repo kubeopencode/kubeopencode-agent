@@ -26,6 +26,3 @@ spec:
         name: kubeopencode-agent
       description: |
         Follow the workflow defined in `workflows/periodic-tiny-refactor.md`.
-
-        Identify and implement ONE small, safe refactoring in kubeopencode.
-        Repository: kubeopencode/kubeopencode
