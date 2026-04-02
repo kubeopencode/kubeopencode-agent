@@ -1,6 +1,6 @@
 # Weekly OpenCode Update
 
-Check if there is a new release of OpenCode and update the Dockerfile version if a newer version is available.
+Check if there is a new release of OpenCode and update the version in `agents/Makefile` (single source of truth) if a newer version is available.
 
 ## Trigger
 
@@ -11,9 +11,9 @@ Check if there is a new release of OpenCode and update the Dockerfile version if
 
 1. Navigate to the cloned `kubeopencode` directory
 
-2. Read current version from `agents/opencode/Dockerfile`:
+2. Read current version from `agents/Makefile` (single source of truth):
    ```bash
-   grep 'ARG OPENCODE_VERSION=' agents/opencode/Dockerfile
+   grep 'OPENCODE_VERSION' agents/Makefile
    ```
 
 3. Fetch latest release from GitHub:
@@ -27,14 +27,14 @@ Check if there is a new release of OpenCode and update the Dockerfile version if
 
 ## Phase 2: Update
 
-1. Update the `ARG OPENCODE_VERSION=x.y.z` line in `agents/opencode/Dockerfile`
+1. Update the `OPENCODE_VERSION ?= x.y.z` line in `agents/Makefile`
 2. No other changes to the file
 
 ## Phase 3: PR
 
 ```bash
 git checkout -b chore/bump-opencode-<version>
-git add agents/opencode/Dockerfile
+git add agents/Makefile
 git commit -s -m "chore(agents): bump opencode version to <version>"
 git push -u origin HEAD
 gh pr create \
@@ -50,5 +50,5 @@ _Automated by kubeopencode-agent_"
 ## Rules
 
 - Only update if there is actually a newer version
-- Do not make any other changes to the file
+- Do not make any other changes to the Makefile
 - Use the exact version number from the GitHub release (without `v` prefix)

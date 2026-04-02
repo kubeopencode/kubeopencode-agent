@@ -27,5 +27,5 @@ spec:
       description: |
         Follow the workflow defined in `workflows/weekly-opencode-update.md`.
 
-        Check for new OpenCode releases and update the Dockerfile version.
+        Check for new OpenCode releases and update the version in agents/Makefile.
         Repository: kubeopencode/kubeopencode
