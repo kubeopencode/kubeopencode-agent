@@ -49,6 +49,7 @@ All detailed docs live under `docs/` and **MUST** be linked here. When adding or
 | Document | Description |
 |----------|-------------|
 | [.claude/skills/README.md](.claude/skills/README.md) | Skills catalog, index, and instructions for adding new skills |
+| [.opencode/plugins/](.opencode/plugins/) | OpenCode TUI plugins — custom branding ("Kube OC") via the [opencode plugin mechanism](https://opencode.ai/docs/plugins/) |
 | [workflows/README.md](workflows/README.md) | Workflows catalog: user-triggered or scheduled multi-phase processes |
 
 **Repositories & Code** — load when reading/searching code or analyzing dependencies:
