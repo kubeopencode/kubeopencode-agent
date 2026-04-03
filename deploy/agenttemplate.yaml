@@ -20,6 +20,10 @@ spec:
       git:
         repository: https://github.com/kubeopencode/kubeopencode-agent.git
         ref: main
+        sync:
+          enabled: true
+          interval: 5m
+          policy: HotReload
       mountPath: .
   credentials:
     # Mount entire secret - all keys become env vars automatically

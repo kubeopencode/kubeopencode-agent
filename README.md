@@ -88,6 +88,10 @@ Reference repos are managed via `repos/repos.yaml` and cloned as shallow read-on
 
 When a task requires reading source code (PR review, dependency analysis, code search), check if the target repo is cloned under `repos/`. If not, run `sync-repos.sh` first. For simple metadata queries (PR status, issue counts), prefer GitHub API.
 
+**CRITICAL: Before editing KubeOpenCode CRD YAMLs (deploy/*.yaml)**, always:
+1. Run `./repos/sync-repos.sh --update` to ensure the KubeOpenCode source is up-to-date.
+2. Read the Go type definitions in `repos/core/kubeopencode/kubeopencode/api/v1alpha1/` to verify the exact field names and nesting — never guess CRD field names or placement from memory.
+
 ### Development via Git Worktree
 
 When making code changes to repos under `repos/` (bug fixes, features, PRs), **always use git worktrees** — never modify the main clone directly. The main clone stays as a clean reference.
