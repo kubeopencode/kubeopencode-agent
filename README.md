@@ -71,59 +71,6 @@ Always use signed commits with the signoff flag:
 git commit -s -m "type(scope): description"
 ```
 
-## GitHub Response Methods
-
-### Issue Comment
-```bash
-gh issue comment ${NUMBER} --body "<your response>"
-```
-
-### PR Comment (General)
-```bash
-gh pr comment ${NUMBER} --body "<your response>"
-```
-
-### PR Review with Inline Comments
-```bash
-gh api repos/${REPO}/pulls/${PR_NUMBER}/reviews \
-  -f event="COMMENT" \
-  -f body="## Review Summary
-
-[Your summary here]
-
----
-*Review by kubeopencode-agent*" \
-  -f 'comments[0][path]=path/to/file.go' \
-  -f 'comments[0][line]=42' \
-  -f 'comments[0][body]=Your inline comment'
-```
-
-For multiple inline comments:
-```bash
--f 'comments[1][path]=another/file.go' \
--f 'comments[1][line]=15' \
--f 'comments[1][body]=Another comment'
-```
-
-**IMPORTANT**: The `line` parameter must be a line number from the NEW version of the file. Only comment on lines with `+` prefix in the diff.
-
-### PR Review (Summary Only, No Inline Comments)
-```bash
-gh api repos/${REPO}/pulls/${PR_NUMBER}/reviews \
-  -f event="COMMENT" \
-  -f body="## Review Summary
-
-[Your summary here]
-
----
-*Review by kubeopencode-agent*"
-```
-
-### Discussion Comment
-```bash
-gh api repos/${REPO}/discussions/${NUMBER}/comments -f body="<your response>"
-```
-
 ## Working with Code
 
 Reference repos are managed via `repos/repos.yaml` and cloned as shallow read-only copies under `repos/`.
