@@ -27,12 +27,12 @@ spec:
   plugins:
     - name: "@kubeopencode/opencode-slack-plugin"
       target: server
-  # OpenCode Go subscription using Kimi K2.6
+  # Kimi For Coding using Kimi K2.6
   config:
-    model: opencode-go/kimi-k2.6
-    small_model: opencode-go/kimi-k2.6
+    model: kimi-for-coding/k2p6
+    small_model: kimi-for-coding/k2p6
     share: disabled
     autoupdate: false
     agent:
       general:
-        model: opencode-go/kimi-k2.6
+        model: kimi-for-coding/k2p6

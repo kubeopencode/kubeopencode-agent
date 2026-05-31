@@ -26,18 +26,12 @@ spec:
   persistence:
     sessions:
       size: "1Gi"
-  # OpenCode Go subscription using DeepSeek V4 Flash with high reasoning
+  # Kimi For Coding using Kimi K2.6
   config:
-    model: opencode-go/deepseek-v4-flash
-    small_model: opencode-go/deepseek-v4-flash
+    model: kimi-for-coding/k2p6
+    small_model: kimi-for-coding/k2p6
     share: disabled
     autoupdate: false
-    provider:
-      opencode-go:
-        models:
-          deepseek-v4-flash:
-            options:
-              reasoningEffort: high
     agent:
       general:
-        model: opencode-go/deepseek-v4-flash
+        model: kimi-for-coding/k2p6

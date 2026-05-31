@@ -26,19 +26,13 @@ spec:
           policy: HotReload
       mountPath: .
   config:
-    model: opencode-go/deepseek-v4-flash
-    small_model: opencode-go/deepseek-v4-flash
+    model: kimi-for-coding/k2p6
+    small_model: kimi-for-coding/k2p6
     share: disabled
     autoupdate: false
-    provider:
-      opencode-go:
-        models:
-          deepseek-v4-flash:
-            options:
-              reasoningEffort: high
     agent:
       general:
-        model: opencode-go/deepseek-v4-flash
+        model: kimi-for-coding/k2p6
   # Proxy via Clash on K3s host
   proxy:
     httpProxy: "http://host.k3s.internal:7897"
@@ -49,9 +43,9 @@ spec:
     - name: git
       secretRef:
         name: git-settings
-    - name: opencode
+    - name: kimi-for-coding
       secretRef:
-        name: opencode-credentials
+        name: kimi-for-coding-credentials
     # GitHub App credentials (write access)
     - name: github-app
       secretRef:
