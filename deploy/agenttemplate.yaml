@@ -10,6 +10,17 @@ spec:
   executorImage: quay.io/kubeopencode/kubeopencode-agent-devbox:latest
   workspaceDir: /workspace
   serviceAccountName: kubeopencode-agent
+  podSpec:
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "500m"
+      limits:
+        memory: "4Gi"
+        cpu: "2000m"
+    extraEnv:
+      - name: PATH
+        value: "/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   contexts:
     # Agent repo at workspace root - AGENTS.md, skills, workflows auto-discovered
     # Reference repos (kubeopencode, skills, etc.) are managed via repos/repos.yaml

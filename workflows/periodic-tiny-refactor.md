@@ -13,6 +13,7 @@ Use static analysis tools to discover refactoring opportunities:
 
 ```bash
 cd kubeopencode
+export PATH="/usr/local/go/bin:$PATH"
 
 # Find unused code, shadowed variables, etc.
 go vet ./...

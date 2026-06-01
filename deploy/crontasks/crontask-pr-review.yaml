@@ -24,5 +24,6 @@ spec:
     spec:
       templateRef:
         name: kubeopencode-base
+      timeout: "1h"
       description: |
         Follow the workflow defined in `workflows/daily-pr-review.md`.
