@@ -1,0 +1,53 @@
+# Copyright Contributors to the KubeOpenCode project
+# Lightweight TCP proxy to expose K3s etcd metrics (localhost:2381) to in-cluster Prometheus.
+# K3s etcd binds to 127.0.0.1 by default; this proxy uses hostNetwork to bridge access.
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: etcd-metrics-proxy
+  namespace: monitoring
+  labels:
+    app: etcd-metrics-proxy
+spec:
+  selector:
+    matchLabels:
+      app: etcd-metrics-proxy
+  template:
+    metadata:
+      labels:
+        app: etcd-metrics-proxy
+    spec:
+      hostNetwork: true
+      containers:
+        - name: proxy
+          image: alpine/socat:1.8.0.0
+          command: ["/bin/sh", "-c"]
+          args:
+            - exec socat TCP-LISTEN:9238,fork,reuseaddr TCP:127.0.0.1:2381
+          ports:
+            - containerPort: 9238
+              name: metrics
+          resources:
+            requests:
+              memory: "8Mi"
+              cpu: "10m"
+            limits:
+              memory: "32Mi"
+              cpu: "50m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: etcd-metrics-proxy
+  namespace: monitoring
+  labels:
+    app: etcd-metrics-proxy
+spec:
+  selector:
+    app: etcd-metrics-proxy
+  ports:
+    - port: 9238
+      targetPort: 9238
+      name: metrics
+  type: ClusterIP

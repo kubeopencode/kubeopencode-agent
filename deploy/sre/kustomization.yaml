@@ -1,0 +1,17 @@
+# Copyright Contributors to the KubeOpenCode project
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: monitoring
+
+resources:
+  - namespace.yaml
+  - prometheus/prometheus.yaml
+  - prometheus/kube-state-metrics.yaml
+  - prometheus/node-exporter.yaml
+
+  - grafana/grafana.yaml
+  - alertmanager/alertmanager.yaml
+  - alertmanager/slack-secret.yaml
+  - otel-collector/otel-collector.yaml
+  - rules/prometheus-rules.yaml

@@ -15,3 +15,13 @@ spec:
   # Tasks are deleted after 1 week (604800 seconds) from completion
   cleanup:
     ttlSecondsAfterFinished: 604800
+
+  # OpenTelemetry observability
+  observability:
+    openTelemetry:
+      enabled: true
+      endpoint: "http://otel-collector.monitoring.svc.cluster.local:4318"
+      recordContent: true
+      resourceAttributes:
+        deployment.environment: "production"
+        service.namespace: "kubeopencode-agent"

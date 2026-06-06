@@ -1,0 +1,218 @@
+# Copyright Contributors to the KubeOpenCode project
+# Prometheus alerting rules for KubeOpenCode Agent platform
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-rules
+  namespace: monitoring
+data:
+  kubeopencode-alerts.yml: |
+    groups:
+      - name: kubeopencode-critical
+        interval: 30s
+        rules:
+          - alert: AgentDown
+            expr: |
+              (
+                kube_deployment_spec_replicas{namespace="kubeopencode-agent", deployment="kubeopencode-agent-server"} > 0
+              )
+              and on()
+              (
+                (
+                  kube_pod_status_ready{namespace="kubeopencode-agent", pod=~"kubeopencode-agent-server-.*"} == 0
+                )
+                or
+                (
+                  absent(kube_pod_status_ready{namespace="kubeopencode-agent", pod=~"kubeopencode-agent-server-.*"}) == 1
+                )
+              )
+            for: 5m
+            labels:
+              severity: p0
+            annotations:
+              summary: "kubeopencode-agent is not ready or missing"
+              description: "Agent pod has been not ready or absent for more than 5 minutes. All agent services are unavailable."
+              runbook_url: "https://github.com/kubeopencode/kubeopencode-agent/blob/main/docs/sre/runbooks/agent-not-ready.md"
+
+          - alert: SlackAgentDown
+            expr: |
+              (
+                kube_deployment_spec_replicas{namespace="kubeopencode-agent", deployment="slack-agent-server"} > 0
+              )
+              and on()
+              (
+                (
+                  kube_pod_status_ready{namespace="kubeopencode-agent", pod=~"slack-agent-server-.*"} == 0
+                )
+                or
+                (
+                  absent(kube_pod_status_ready{namespace="kubeopencode-agent", pod=~"slack-agent-server-.*"}) == 1
+                )
+              )
+            for: 5m
+            labels:
+              severity: p0
+            annotations:
+              summary: "slack-agent is not ready or missing"
+              description: "Slack agent pod has been not ready or absent for more than 5 minutes. Slack integration is down."
+
+          - alert: TaskFailSpike
+            expr: |
+              (
+                sum(increase(kube_pod_container_status_terminated_reason{namespace="kubeopencode-agent", reason="Error"}[10m]))
+                > 0
+              )
+              and
+              (
+                (
+                  sum(increase(kube_pod_container_status_terminated_reason{namespace="kubeopencode-agent", reason="Error"}[10m]))
+                  /
+                  sum(increase(kube_pod_container_status_terminated_reason{namespace="kubeopencode-agent"}[10m]))
+                ) > 0.2
+              )
+            for: 5m
+            labels:
+              severity: p0
+            annotations:
+              summary: "Task failure rate above 20%"
+              description: "More than 20% of task containers failed in the last 10 minutes. Check task logs for errors."
+
+          - alert: OOMKilledPod
+            expr: kube_pod_container_status_terminated_reason{namespace="kubeopencode-agent", reason="OOMKilled"} == 1
+            for: 0m
+            labels:
+              severity: p0
+            annotations:
+              summary: "Pod OOMKilled in kubeopencode-agent"
+              description: "Pod {{ $labels.pod }} container {{ $labels.container }} was killed due to out of memory. Consider increasing memory limits."
+              runbook_url: "https://github.com/kubeopencode/kubeopencode-agent/blob/main/docs/sre/runbooks/task-oomkilled.md"
+
+      - name: kubeopencode-high
+        interval: 30s
+        rules:
+          - alert: CronTaskMissed
+            expr: |
+              time() - kube_cronjob_next_schedule_time{namespace="kubeopencode-agent"} > 600
+            for: 5m
+            labels:
+              severity: p1
+            annotations:
+              summary: "CronTask missed its schedule"
+              description: "CronTask {{ $labels.cronjob }} is more than 10 minutes overdue. Last scheduled: {{ $value | humanizeDuration }} ago."
+
+          - alert: TaskPodPending
+            expr: |
+              kube_pod_status_phase{namespace="kubeopencode-agent", phase="Pending"} == 1
+            for: 10m
+            labels:
+              severity: p1
+            annotations:
+              summary: "Task pod stuck in Pending"
+              description: "Pod {{ $labels.pod }} has been pending for more than 10 minutes. Check node resources and scheduling constraints."
+
+          - alert: AgentHighMemoryUsage
+            expr: |
+              (
+                container_memory_working_set_bytes{namespace="kubeopencode-agent", container!=""}
+                /
+                (container_spec_memory_limit_bytes{namespace="kubeopencode-agent", container!=""} > 0)
+              ) > 0.85
+            for: 10m
+            labels:
+              severity: p1
+            annotations:
+              summary: "Agent container memory usage high"
+              description: "Container {{ $labels.container }} in pod {{ $labels.pod }} is using more than 85% of its memory limit."
+
+      - name: kubeopencode-warning
+        interval: 30s
+        rules:
+          - alert: PVCFull
+            expr: |
+              (
+                kubelet_volume_stats_available_bytes{namespace="kubeopencode-agent"}
+                /
+                kubelet_volume_stats_capacity_bytes{namespace="kubeopencode-agent"}
+              ) < 0.2
+            for: 10m
+            labels:
+              severity: p2
+            annotations:
+              summary: "PVC filling up"
+              description: "PVC {{ $labels.persistentvolumeclaim }} in namespace {{ $labels.namespace }} is over 80% full ({{ $value | humanizePercentage }} remaining)."
+
+          - alert: NodeMemoryHigh
+            expr: |
+              (
+                node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes
+              )
+              /
+              node_memory_MemTotal_bytes > 0.85
+            for: 15m
+            labels:
+              severity: p2
+            annotations:
+              summary: "Node memory usage high"
+              description: "Node {{ $labels.instance }} memory usage is above 85%. Current tasks may be at risk of OOMKilled."
+
+          - alert: CoreDNSSERVFAIL
+            expr: |
+              increase(coredns_dns_response_rcode_count{rcode="SERVFAIL"}[5m]) > 0
+            for: 5m
+            labels:
+              severity: p2
+            annotations:
+              summary: "CoreDNS returning SERVFAIL"
+              description: "CoreDNS is returning SERVFAIL responses. Check custom DNS entries (e.g., host.k3s.internal). See postmortem: 2026-05-31-dns-outage."
+              runbook_url: "https://github.com/kubeopencode/kubeopencode-agent/blob/main/docs/sre/postmortems/2026-05-31-dns-outage.md"
+
+          - alert: PrometheusDiskFull
+            expr: |
+              (
+                kubelet_volume_stats_available_bytes{namespace="monitoring", persistentvolumeclaim=~"prometheus-storage-.*"}
+                /
+                kubelet_volume_stats_capacity_bytes{namespace="monitoring", persistentvolumeclaim=~"prometheus-storage-.*"}
+              ) < 0.15
+            for: 10m
+            labels:
+              severity: p2
+            annotations:
+              summary: "Prometheus disk filling up"
+              description: "Prometheus PVC is over 85% full. Data retention may need adjustment or disk expansion."
+
+      - name: k3s-control-plane
+        interval: 30s
+        rules:
+          - alert: K3sNodeNotReady
+            expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+            for: 2m
+            labels:
+              severity: p0
+            annotations:
+              summary: "K3s node is NotReady"
+              description: "Node {{ $labels.node }} has been NotReady for more than 2 minutes. All cluster workloads are at risk."
+
+          - alert: K3sEtcdHighFsyncLatency
+            expr: |
+              histogram_quantile(0.95,
+                sum(rate(etcd_disk_wal_fsync_duration_seconds_bucket[5m])) by (le, instance)
+              ) > 0.1
+            for: 5m
+            labels:
+              severity: p1
+            annotations:
+              summary: "K3s etcd fsync latency high"
+              description: "Etcd WAL fsync P95 latency is above 100ms on {{ $labels.instance }}. Disk IO pressure may be affecting control plane stability."
+
+          - alert: K3sAPIServerHighLatency
+            expr: |
+              histogram_quantile(0.99,
+                sum(rate(apiserver_request_duration_seconds_bucket[5m])) by (le, instance)
+              ) > 1
+            for: 5m
+            labels:
+              severity: p1
+            annotations:
+              summary: "K3s API server latency high"
+              description: "API server request P99 latency is above 1 second. Control plane may be overloaded or experiencing resource contention."

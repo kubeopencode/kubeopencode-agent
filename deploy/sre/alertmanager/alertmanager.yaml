@@ -1,0 +1,172 @@
+# Copyright Contributors to the KubeOpenCode project
+# Alertmanager deployment with Slack integration
+# IMPORTANT: Update the slack-secret.yaml with your actual webhook URL before deploying
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: monitoring
+data:
+  alertmanager.yml: |
+    global:
+      slack_api_url_file: '/etc/alertmanager/slack/webhook-url'
+      smtp_require_tls: false
+
+    route:
+      receiver: 'slack'
+      group_by: ['alertname', 'severity']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        - match:
+            severity: p0
+          receiver: 'slack-p0'
+          group_wait: 10s
+          repeat_interval: 1h
+        - match:
+            severity: p1
+          receiver: 'slack-p1'
+          repeat_interval: 2h
+        - match:
+            severity: p2
+          receiver: 'slack-p2'
+          repeat_interval: 4h
+
+    receivers:
+      - name: 'slack'
+        slack_configs:
+          - channel: '#alerts'
+            title: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Severity:* {{ .Labels.severity }}
+              {{ end }}
+            send_resolved: true
+
+      - name: 'slack-p0'
+        slack_configs:
+          - channel: '#alerts'
+            title: ':rotating_light: P0: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+            text: |
+              {{ range .Alerts }}
+              *ALERT:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Started:* {{ .StartsAt }}
+              {{ end }}
+            send_resolved: true
+
+      - name: 'slack-p1'
+        slack_configs:
+          - channel: '#alerts'
+            title: ':warning: P1: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              {{ end }}
+            send_resolved: true
+
+      - name: 'slack-p2'
+        slack_configs:
+          - channel: '#alerts'
+            title: ':information_source: P2: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              {{ end }}
+            send_resolved: true
+
+    inhibit_rules:
+      - source_match:
+          severity: 'p0'
+        target_match:
+          severity: 'p1'
+        equal: ['alertname']
+      - source_match:
+          severity: 'p1'
+        target_match:
+          severity: 'p2'
+        equal: ['alertname']
+# NOTE: The alertmanager-slack Secret is defined in slack-secret.yaml.
+#       Replace the placeholder webhook URL before deploying.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alertmanager
+  template:
+    metadata:
+      labels:
+        app: alertmanager
+    spec:
+      containers:
+        - name: alertmanager
+          image: prom/alertmanager:v0.27.0
+          args:
+            - '--config.file=/etc/alertmanager/alertmanager.yml'
+            - '--storage.path=/alertmanager'
+            - '--web.external-url=http://alertmanager.monitoring:9093'
+          ports:
+            - containerPort: 9093
+              name: web
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "20m"
+            limits:
+              memory: "64Mi"
+              cpu: "50m"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alertmanager
+            - name: slack-secret
+              mountPath: /etc/alertmanager/slack
+              readOnly: true
+            - name: storage
+              mountPath: /alertmanager
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: 9093
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9093
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: alertmanager-config
+        - name: slack-secret
+          secret:
+            secretName: alertmanager-slack
+        - name: storage
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  namespace: monitoring
+spec:
+  selector:
+    app: alertmanager
+  ports:
+    - port: 9093
+      targetPort: 9093
+      name: web
+  type: ClusterIP

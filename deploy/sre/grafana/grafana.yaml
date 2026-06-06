@@ -1,0 +1,451 @@
+# Copyright Contributors to the KubeOpenCode project
+# Grafana deployment with 3 independent dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: monitoring
+data:
+  kubeopencode-overview.json: |
+    {
+      "id": null,
+      "uid": "kubeopencode-overview",
+      "title": "KubeOpenCode",
+      "tags": ["kubeopencode", "sre"],
+      "timezone": "utc",
+      "schemaVersion": 36,
+      "refresh": "30s",
+      "time": {"from": "now-6h", "to": "now"},
+      "panels": [
+        {
+          "id": 1,
+          "title": "Agent Health",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "kube_deployment_status_replicas_available{namespace=\"kubeopencode-agent\",deployment=\"slack-agent-server\"} / kube_deployment_spec_replicas{namespace=\"kubeopencode-agent\",deployment=\"slack-agent-server\"}",
+              "legendFormat": "slack-agent-server"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "steps": [
+                  {"color": "red", "value": 0},
+                  {"color": "green", "value": 1}
+                ]
+              }
+            }
+          },
+          "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}
+        },
+        {
+          "id": 2,
+          "title": "Running Tasks",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "sum(kube_pod_status_phase{namespace=\"kubeopencode-agent\",phase=\"Running\",pod!~\"slack-agent-server-.*\"})",
+              "legendFormat": "Running"
+            }
+          ],
+          "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0}
+        },
+        {
+          "id": 3,
+          "title": "Agent Replicas",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "kube_deployment_status_replicas_available{namespace=\"kubeopencode-agent\",deployment=\"slack-agent-server\"}",
+              "legendFormat": "Available"
+            },
+            {
+              "expr": "kube_deployment_spec_replicas{namespace=\"kubeopencode-agent\",deployment=\"slack-agent-server\"}",
+              "legendFormat": "Desired"
+            }
+          ],
+          "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0}
+        },
+        {
+          "id": 4,
+          "title": "Failed Tasks",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "sum(kube_pod_status_phase{namespace=\"kubeopencode-agent\",phase=\"Failed\"})",
+              "legendFormat": "Failed"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "steps": [
+                  {"color": "green", "value": 0},
+                  {"color": "yellow", "value": 1},
+                  {"color": "red", "value": 3}
+                ]
+              }
+            }
+          },
+          "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0}
+        },
+        {
+          "id": 5,
+          "title": "Task Pods by Phase",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "sum by (phase) (kube_pod_status_phase{namespace=\"kubeopencode-agent\"})",
+              "legendFormat": "{{ phase }}"
+            }
+          ],
+          "gridPos": {"h": 6, "w": 12, "x": 0, "y": 4}
+        },
+        {
+          "id": 6,
+          "title": "Agent CPU Usage",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "rate(container_cpu_usage_seconds_total{namespace=\"kubeopencode-agent\",pod=~\"slack-agent-server-.*\"}[5m])",
+              "legendFormat": "{{ pod }}"
+            }
+          ],
+          "gridPos": {"h": 6, "w": 12, "x": 12, "y": 4}
+        },
+        {
+          "id": 7,
+          "title": "Agent Memory Usage",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "container_memory_working_set_bytes{namespace=\"kubeopencode-agent\",pod=~\"slack-agent-server-.*\"} / 1024 / 1024",
+              "legendFormat": "{{ pod }} MiB"
+            }
+          ],
+          "gridPos": {"h": 6, "w": 24, "x": 0, "y": 10}
+        }
+      ]
+    }
+  k3s-cluster.json: |
+    {
+      "id": null,
+      "uid": "k3s-cluster",
+      "title": "K3s",
+      "tags": ["k3s", "sre", "infrastructure"],
+      "timezone": "utc",
+      "schemaVersion": 36,
+      "refresh": "30s",
+      "time": {"from": "now-6h", "to": "now"},
+      "panels": [
+        {
+          "id": 1,
+          "title": "Node Status",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "kube_node_status_condition{condition=\"Ready\",status=\"true\"}",
+              "legendFormat": "{{ node }}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "steps": [
+                  {"color": "red", "value": 0},
+                  {"color": "green", "value": 1}
+                ]
+              }
+            }
+          },
+          "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}
+        },
+        {
+          "id": 2,
+          "title": "Cluster Pods",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "count(kube_pod_status_phase)",
+              "legendFormat": "Total Pods"
+            }
+          ],
+          "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0}
+        },
+        {
+          "id": 3,
+          "title": "Node CPU %",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "100 - (avg(irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+              "legendFormat": "CPU %"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "steps": [
+                  {"color": "green", "value": 0},
+                  {"color": "yellow", "value": 70},
+                  {"color": "red", "value": 85}
+                ]
+              }
+            }
+          },
+          "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0}
+        },
+        {
+          "id": 4,
+          "title": "Node Memory %",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100",
+              "legendFormat": "Memory %"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "steps": [
+                  {"color": "green", "value": 0},
+                  {"color": "yellow", "value": 70},
+                  {"color": "red", "value": 85}
+                ]
+              }
+            }
+          },
+          "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0}
+        },
+        {
+          "id": 5,
+          "title": "Node CPU Usage",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "100 - (avg by (instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+              "legendFormat": "{{ instance }}"
+            }
+          ],
+          "gridPos": {"h": 6, "w": 12, "x": 0, "y": 4}
+        },
+        {
+          "id": 6,
+          "title": "Node Memory Usage",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100",
+              "legendFormat": "{{ instance }}"
+            }
+          ],
+          "gridPos": {"h": 6, "w": 12, "x": 12, "y": 4}
+        },
+        {
+          "id": 7,
+          "title": "Node Disk Usage",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "(1 - node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"}) * 100",
+              "legendFormat": "{{ instance }}"
+            }
+          ],
+          "gridPos": {"h": 6, "w": 12, "x": 0, "y": 10}
+        },
+        {
+          "id": 8,
+          "title": "Node Network IO",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "rate(node_network_receive_bytes_total{device!~=\"lo\"}[5m]) / 1024",
+              "legendFormat": "{{ instance }} RX KiB/s"
+            },
+            {
+              "expr": "rate(node_network_transmit_bytes_total{device!~=\"lo\"}[5m]) / 1024",
+              "legendFormat": "{{ instance }} TX KiB/s"
+            }
+          ],
+          "gridPos": {"h": 6, "w": 12, "x": 12, "y": 10}
+        }
+      ]
+    }
+  slo-compliance.json: |
+    {
+      "id": null,
+      "uid": "slo-compliance",
+      "title": "SLO",
+      "tags": ["kubeopencode", "sre", "slo"],
+      "timezone": "utc",
+      "schemaVersion": 36,
+      "refresh": "30s",
+      "time": {"from": "now-30d", "to": "now"},
+      "panels": [
+        {
+          "id": 1,
+          "title": "Agent Availability (30d)",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "avg_over_time(kube_deployment_status_replicas_available{namespace=\"kubeopencode-agent\",deployment=\"slack-agent-server\"} / kube_deployment_spec_replicas{namespace=\"kubeopencode-agent\",deployment=\"slack-agent-server\"}[30d]) * 100",
+              "legendFormat": "Availability %"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {"lineWidth": 2},
+              "thresholds": {
+                "steps": [
+                  {"color": "red", "value": 0},
+                  {"color": "yellow", "value": 99.0},
+                  {"color": "green", "value": 99.5}
+                ]
+              }
+            }
+          },
+          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0}
+        },
+        {
+          "id": 2,
+          "title": "Error Budget Remaining",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "0.995 - (1 - avg_over_time(kube_deployment_status_replicas_available{namespace=\"kubeopencode-agent\",deployment=\"slack-agent-server\"} / kube_deployment_spec_replicas{namespace=\"kubeopencode-agent\",deployment=\"slack-agent-server\"}[30d]))",
+              "legendFormat": "Budget Left"
+            }
+          ],
+          "gridPos": {"h": 4, "w": 12, "x": 0, "y": 8}
+        },
+        {
+          "id": 3,
+          "title": "Task Success Rate (7d)",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "1 - (sum(rate(kube_pod_container_status_terminated_reason{namespace=\"kubeopencode-agent\",reason=\"Error\"}[7d])) / sum(rate(kube_pod_container_status_terminated_reason{namespace=\"kubeopencode-agent\"}[7d])))",
+              "legendFormat": "Success Rate"
+            }
+          ],
+          "gridPos": {"h": 4, "w": 12, "x": 12, "y": 8}
+        }
+      ]
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: monitoring
+data:
+  datasources.yml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+        editable: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-provisioning
+  namespace: monitoring
+data:
+  dashboards.yml: |
+    apiVersion: 1
+    providers:
+      - name: 'default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 10
+        allowUiUpdates: true
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.3.0
+          ports:
+            - containerPort: 3000
+              name: web
+          env:
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: "Viewer"
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: "admin"
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+          volumeMounts:
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+            - name: dashboard-provisioning
+              mountPath: /etc/grafana/provisioning/dashboards
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      volumes:
+        - name: dashboards
+          configMap:
+            name: grafana-dashboards
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+        - name: dashboard-provisioning
+          configMap:
+            name: grafana-dashboard-provisioning
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  selector:
+    app: grafana
+  ports:
+    - port: 3000
+      targetPort: 3000
+      name: web
+  type: ClusterIP

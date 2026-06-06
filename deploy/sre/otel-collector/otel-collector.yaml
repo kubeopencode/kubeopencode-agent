@@ -1,0 +1,126 @@
+# Copyright Contributors to the KubeOpenCode project
+# OpenTelemetry Collector for KubeOpenCode Agent platform
+# Receives traces/metrics from opencode-plugin-otel and forwards to Prometheus
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: monitoring
+data:
+  otel-collector.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+
+    processors:
+      batch:
+        timeout: 1s
+        send_batch_size: 1024
+      resource:
+        attributes:
+          - key: cluster
+            value: kubeopencode-k3s
+            action: upsert
+          - key: namespace
+            value: kubeopencode-agent
+            action: upsert
+
+    exporters:
+      prometheusremotewrite:
+        endpoint: http://prometheus:9090/api/v1/write
+        # Note: Prometheus must have --web.enable-remote-write-receiver flag
+        # We'll add this to Prometheus args
+      
+      debug:
+        verbosity: detailed
+
+    service:
+      extensions: [health_check]
+      pipelines:
+        metrics:
+          receivers: [otlp]
+          processors: [batch, resource]
+          exporters: [prometheusremotewrite, debug]
+        traces:
+          receivers: [otlp]
+          processors: [batch, resource]
+          exporters: [debug]
+          # Future: add jaeger/tempo exporter for trace storage
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:0.114.0
+          args:
+            - '--config=/conf/otel-collector.yaml'
+          ports:
+            - containerPort: 4317
+              name: otlp-grpc
+            - containerPort: 4318
+              name: otlp-http
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+          volumeMounts:
+            - name: config
+              mountPath: /conf
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: monitoring
+spec:
+  selector:
+    app: otel-collector
+  ports:
+    - port: 4317
+      targetPort: 4317
+      name: otlp-grpc
+    - port: 4318
+      targetPort: 4318
+      name: otlp-http
+  type: ClusterIP

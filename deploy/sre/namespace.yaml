@@ -1,0 +1,9 @@
+# Copyright Contributors to the KubeOpenCode project
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    app.kubernetes.io/name: kubeopencode
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: kubeopencode-agent
