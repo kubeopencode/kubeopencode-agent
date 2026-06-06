@@ -149,11 +149,10 @@ jq ... > .output/processed_prs.json
 
 ## Agent Context Convention
 
-Every directory that contains a `README.md` intended as agent context **MUST** also have symlinks so all AI coding tools can discover it:
+Every directory that contains a `README.md` intended as agent context **MUST** also have a symlink so AI coding tools can discover it:
 
 ```bash
-ln -s README.md CLAUDE.md   # Claude Code / Claude Agent
-ln -s README.md AGENTS.md   # Codex / other agents
+ln -s README.md AGENTS.md
 ```
 
-When creating a new `README.md` in any subdirectory, always create both symlinks alongside it.
+When creating a new `README.md` in any subdirectory, always create the symlink alongside it.
