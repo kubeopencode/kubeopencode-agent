@@ -208,11 +208,11 @@ data:
           - alert: K3sAPIServerHighLatency
             expr: |
               histogram_quantile(0.99,
-                sum(rate(apiserver_request_duration_seconds_bucket[5m])) by (le, instance)
+                sum(rate(apiserver_request_duration_seconds_bucket{verb!~"LIST|WATCH"}[5m])) by (le, instance)
               ) > 1
             for: 5m
             labels:
               severity: p1
             annotations:
               summary: "K3s API server latency high"
-              description: "API server request P99 latency is above 1 second. Control plane may be overloaded or experiencing resource contention."
+              description: "API server request P99 latency (excluding LIST/WATCH) is above 1 second. Control plane may be overloaded or experiencing resource contention."
