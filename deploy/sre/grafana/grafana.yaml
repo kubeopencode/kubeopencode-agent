@@ -255,22 +255,6 @@ data:
             }
           ],
           "gridPos": {"h": 6, "w": 12, "x": 0, "y": 10}
-        },
-        {
-          "id": 8,
-          "title": "Node Network IO",
-          "type": "timeseries",
-          "targets": [
-            {
-              "expr": "rate(node_network_receive_bytes_total{device!~=\"lo\"}[5m]) / 1024",
-              "legendFormat": "{{ instance }} RX KiB/s"
-            },
-            {
-              "expr": "rate(node_network_transmit_bytes_total{device!~=\"lo\"}[5m]) / 1024",
-              "legendFormat": "{{ instance }} TX KiB/s"
-            }
-          ],
-          "gridPos": {"h": 6, "w": 12, "x": 12, "y": 10}
         }
       ]
     }
