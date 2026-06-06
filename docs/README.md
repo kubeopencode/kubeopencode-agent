@@ -10,6 +10,19 @@ Reference documentation for the KubeOpenCode Agent. These files are loaded **on 
 
 ## Document Index
 
+### Agent Capabilities
+
 | Document | Description |
 |----------|-------------|
 | *(docs will be added as the agent's capabilities grow)* | |
+
+### Site Reliability Engineering (SRE)
+
+| Document | Description |
+|----------|-------------|
+| [sre/README.md](sre/README.md) | SRE overview, current cluster status, and architecture |
+| [sre/slos.md](sre/slos.md) | SLO/SLI/SLA definitions and error budget policy |
+| [sre/observability.md](sre/observability.md) | Observability stack (Prometheus + Grafana on K3s) |
+| [sre/alerting.md](sre/alerting.md) | Alerting rules and Slack integration |
+| [sre/postmortems/](sre/postmortems/) | Postmortem reports for incidents |
+| [sre/runbooks/](sre/runbooks/) | Operational runbooks for common issues |
