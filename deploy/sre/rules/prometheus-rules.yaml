@@ -79,7 +79,7 @@ data:
               description: "More than 20% of task containers failed in the last 10 minutes. Check task logs for errors."
 
           - alert: OOMKilledPod
-            expr: kube_pod_container_status_terminated_reason{namespace="kubeopencode-agent", reason="OOMKilled"} == 1
+            expr: kube_pod_container_status_last_terminated_reason{namespace="kubeopencode-agent", reason="OOMKilled"} == 1
             for: 0m
             labels:
               severity: p0
