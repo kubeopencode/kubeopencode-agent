@@ -26,15 +26,23 @@ Check open Dependabot alerts on kubeopencode/kubeopencode and fix them by adding
 
 ## Phase 2: Fix npm Vulnerabilities
 
-For each npm vulnerability:
+**Memory optimization**: ui and website are independent projects. Process them **serially** and clean up `node_modules` between projects to avoid keeping two dependency trees in memory.
 
-1. Check which subprojects use the package:
+Set memory cap for Node.js before running any pnpm command:
+```bash
+export NODE_OPTIONS="--max-old-space-size=3072"
+```
+
+### Per-project workflow (run for ui first, then website)
+
+1. Check if the package exists in this subproject:
    ```bash
-   cd ui && pnpm why <package-name> 2>&1
-   cd ../website && pnpm why <package-name> 2>&1
+   cd ui  # or cd website
+   pnpm why <package-name> 2>&1
    ```
+   If not found, skip this project.
 
-2. If the package is a transitive dependency, add a pnpm override in the relevant `package.json` under `pnpm.overrides`:
+2. Add the pnpm override in this project's `package.json`:
    ```json
    "pnpm": {
      "overrides": {
@@ -42,12 +50,23 @@ For each npm vulnerability:
      }
    }
    ```
+   If multiple packages are vulnerable, add **all overrides at once** before running install (avoids repeated lockfile rewrites).
 
-3. If the package is a direct dependency, update the version directly
+3. Run install with reduced concurrency:
+   ```bash
+   pnpm install --no-frozen-lockfile --child-concurrency 2
+   ```
 
-4. Run `pnpm install --no-frozen-lockfile` in the affected subproject
+4. Verify the fix:
+   ```bash
+   pnpm why <package-name>
+   ```
 
-5. Verify the fix: `pnpm why <package-name>` should show the patched version
+5. **Clean up before switching to the next project**:
+   ```bash
+   rm -rf node_modules
+   cd ..
+   ```
 
 ## Phase 3: Fix Go Vulnerabilities
 
@@ -55,7 +74,13 @@ For each Go vulnerability:
 
 1. Run `go get <module>@<patched-version>`
 2. Run `go mod tidy`
-3. Run `go mod vendor` if a vendor directory exists
+3. Run `go mod vendor` **only if** a `vendor/` directory already exists **and** the module is in the vendor tree:
+   ```bash
+   if [ -d vendor ] && grep -q "<module>" vendor/modules.txt 2>/dev/null; then
+     go mod vendor
+   fi
+   ```
+   Skip vendor update if the fix is purely for an unused transitive dependency — CI will catch it.
 
 ## Phase 4: Commit and Create PR
 
@@ -77,5 +102,7 @@ gh pr create --title "fix(deps): resolve Dependabot vulnerabilities" \
 
 - Only fix vulnerabilities that have a patched version available
 - Do NOT modify code logic — only dependency versions and lockfiles
+- **Batch npm overrides**: collect all npm vulnerabilities first, add ALL overrides to `package.json` in one edit, then run `pnpm install` once. Avoid rewriting the lockfile multiple times.
+- **Process projects serially**: finish `ui` completely (including `rm -rf node_modules`) before touching `website`
 - Verify each fix with `pnpm why` or `go list -m` before committing
 - If a fix breaks `pnpm install` or `go mod tidy`, revert that specific change and skip it
