@@ -78,17 +78,55 @@ Should return `{"ok": true, ...}`. If `{"ok": false, "error": "invalid_auth"}`, 
    kubectl rollout restart deployment slack-agent-server -n kubeopencode-agent
    ```
 
-### Scenario C: Network Issues
+### Scenario C: Network Issues — DNS IP Drift (Most Common)
 
-If the pod logs show WebSocket connection timeouts:
+If the pod logs show `ECONNREFUSED` or `pong wasn't received` errors, the most likely cause is `host.k3s.internal` DNS resolving to a stale IP. The K3s node uses DHCP, so its IP can change on lease renewal.
 
 ```bash
-# Check if pod can reach Slack
+# 1. Check what host.k3s.internal resolves to inside the pod
 kubectl exec -n kubeopencode-agent deployment/slack-agent-server -- \
-  wget -qO- https://slack.com/api/api.test
+  sh -c 'cat /etc/resolv.conf; echo "---"; wget -O- http://host.k3s.internal:7897/ 2>&1 | head -3'
+# If "No route to host" → DNS points to wrong IP
 
-# Should return {"ok":true}
-# If timeout, check cluster egress (DNS, firewall, proxy)
+# 2. Verify the actual node IP
+kubectl get nodes -o wide
+# Compare INTERNAL-IP with what host.k3s.internal resolves to
+
+# 3. Fix CoreDNS — update coredns-custom ConfigMap with the correct IP
+# Replace 192.168.31.XX with the actual node IP from step 2
+kubectl create configmap coredns-custom \
+  --from-literal=host.k3s.internal.server='host.k3s.internal {
+    hosts {
+      192.168.31.XX host.k3s.internal
+      fallthrough
+    }
+  }
+  ' -n kube-system --dry-run=client -o yaml | kubectl apply -f -
+
+# 4. Restart CoreDNS to pick up changes
+kubectl rollout restart deployment coredns -n kube-system
+kubectl rollout status deployment coredns -n kube-system
+
+# 5. Verify DNS now resolves correctly
+dig +short host.k3s.internal @10.43.0.10
+# Should return the correct node IP
+
+# 6. Restart slack-agent pod (DNS cache inside the pod must be flushed)
+kubectl rollout restart deployment slack-agent-server -n kubeopencode-agent
+# If rollout doesn't create a new pod (PVC ReadWriteOnce), delete old pod:
+kubectl delete pod -n kubeopencode-agent -l kubeopencode.io/agent=slack-agent
+
+# 7. Verify connection
+kubectl logs deployment/slack-agent-server -n kubeopencode-agent --tail=5
+# Should show: [slack-plugin] Slack Socket Mode connected
+```
+
+Also check direct Slack connectivity (bypassing proxy):
+
+```bash
+kubectl exec -n kubeopencode-agent deployment/slack-agent-server -- \
+  wget --no-proxy -qO- https://slack.com/api/api.test
+# Should return {"ok":true,...}
 ```
 
 ### Scenario D: Plugin Not Loaded

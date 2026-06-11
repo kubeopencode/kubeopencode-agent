@@ -1,0 +1,105 @@
+# DNS Guardian — Auto-sync host.k3s.internal DNS entry with node IP
+# Prevents recurring DNS IP drift incidents (see postmortem: 2026-06-11)
+#
+# Runs every 5 minutes. Checks if the CoreDNS host.k3s.internal entry
+# matches the actual K3s node IP. If they differ, updates the ConfigMap
+# and restarts CoreDNS.
+#
+# Deploy: kubectl apply -f deploy/sre/dns-guardian.yaml
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: dns-guardian
+  namespace: kube-system
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          serviceAccountName: dns-guardian
+          restartPolicy: OnFailure
+          containers:
+            - name: dns-guardian
+              image: bitnami/kubectl:1.32
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -e
+                  # Get the actual node IP (first InternalIP)
+                  NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+                  if [ -z "$NODE_IP" ]; then
+                    echo "ERROR: Could not determine node IP"
+                    exit 1
+                  fi
+                  echo "Node IP: $NODE_IP"
+
+                  # Get current DNS entry
+                  CURRENT_IP=$(kubectl get configmap coredns-custom -n kube-system -o jsonpath='{.data.host\.k3s\.internal\.server}' 2>/dev/null | grep -oP '\d+\.\d+\.\d+\.\d+' | head -1 || echo "")
+                  echo "Current DNS IP: ${CURRENT_IP:-not set}"
+
+                  if [ "$CURRENT_IP" != "$NODE_IP" ]; then
+                    echo "DNS IP mismatch! Updating coredns-custom from $CURRENT_IP to $NODE_IP"
+                    kubectl create configmap coredns-custom \
+                      --from-literal=host.k3s.internal.server="host.k3s.internal {
+                    hosts {
+                      $NODE_IP host.k3s.internal
+                      fallthrough
+                    }
+                  }
+                  " -n kube-system --dry-run=client -o yaml | kubectl apply -f -
+                    echo "ConfigMap updated. Restarting CoreDNS..."
+                    kubectl rollout restart deployment coredns -n kube-system
+                    kubectl rollout status deployment coredns -n kube-system --timeout=60s
+                    echo "CoreDNS restarted with new IP."
+                  else
+                    echo "DNS entry is up to date. No action needed."
+                  fi
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dns-guardian
+  namespace: kube-system
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["coredns-custom"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["", "apps"]
+    resources: ["deployments"]
+    resourceNames: ["coredns"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["coredns"]
+    verbs: ["watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dns-guardian
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: dns-guardian
+subjects:
+  - kind: ServiceAccount
+    name: dns-guardian
+    namespace: kube-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dns-guardian
+  namespace: kube-system
