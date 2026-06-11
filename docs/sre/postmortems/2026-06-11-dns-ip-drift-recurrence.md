@@ -49,11 +49,28 @@
 
 | Item | Owner | Due | Status |
 |------|-------|-----|--------|
-| Assign a static IP to the K3s node (e.g., `192.168.31.59` DHCP reservation or static config) | @xue | 2026-06-18 | Open |
-| Create a CronJob or DaemonSet that watches the node IP and auto-updates `coredns-custom` ConfigMap | SRE | 2026-06-18 | Open |
+| Assign a static IP to the K3s node (e.g., `192.168.31.59` DHCP reservation or static config) | @xue | — | Declined — see Decision below |
+| Create a CronJob that auto-updates `coredns-custom` ConfigMap when node IP changes | SRE | 2026-06-11 | Done (`dns-guardian` deployed) |
 | Add Prometheus alert for `host.k3s.internal` DNS resolution mismatch with node IP | SRE | 2026-06-14 | Open |
 | Evaluate using `hostNetwork: true` or a Kubernetes Service instead of DNS for proxy access | SRE | 2026-06-25 | Open |
 | Restart slack-agent pod after CoreDNS changes (added to runbook) | Done | — | Done |
+
+## Decision: Rely on dns-guardian instead of static IP
+
+**Context:** The K3s node (`xue-B550`) is a home server on a consumer network. Its IP is assigned by DHCP and has drifted twice (`.59` ↔ `.91`), causing two P0 incidents.
+
+**Options considered:**
+1. Router DHCP reservation — bind MAC to `192.168.31.59` permanently
+2. OS-level static IP — `nmcli con mod ... ipv4.method manual`
+3. dns-guardian CronJob — auto-detect IP drift and update CoreDNS every 5 minutes
+
+**Decision:** Option 3 (dns-guardian) as the sole remediation. Static IP (options 1–2) is declined.
+
+**Rationale:**
+- This is a **personal/home lab test environment**, not production. A 5-minute detection+repair window is acceptable.
+- dns-guardian is already deployed and working. Adding a static IP provides marginal improvement for the added operational risk (misconfig can lock out SSH).
+- Home router reboots or ISP changes can still break static configs. dns-guardian handles these cases automatically.
+- If this environment transitions to production or a co-located server, revisit static IP or a dedicated proxy Service.
 
 ## Lessons Learned
 
