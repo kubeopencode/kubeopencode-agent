@@ -20,11 +20,11 @@ data:
               and on()
               (
                 (
-                  kube_pod_status_ready{namespace="kubeopencode-agent", pod=~"kubeopencode-agent-server-.*"} == 0
+                  kube_pod_status_ready{namespace="kubeopencode-agent", condition="true", pod=~"kubeopencode-agent-server-.*"} == 0
                 )
                 or
                 (
-                  absent(kube_pod_status_ready{namespace="kubeopencode-agent", pod=~"kubeopencode-agent-server-.*"}) == 1
+                  absent(kube_pod_status_ready{namespace="kubeopencode-agent", condition="true", pod=~"kubeopencode-agent-server-.*"}) == 1
                 )
               )
             for: 5m
@@ -43,11 +43,11 @@ data:
               and on()
               (
                 (
-                  kube_pod_status_ready{namespace="kubeopencode-agent", pod=~"slack-agent-server-.*"} == 0
+                  kube_pod_status_ready{namespace="kubeopencode-agent", condition="true", pod=~"slack-agent-server-.*"} == 0
                 )
                 or
                 (
-                  absent(kube_pod_status_ready{namespace="kubeopencode-agent", pod=~"slack-agent-server-.*"}) == 1
+                  absent(kube_pod_status_ready{namespace="kubeopencode-agent", condition="true", pod=~"slack-agent-server-.*"}) == 1
                 )
               )
             for: 5m
