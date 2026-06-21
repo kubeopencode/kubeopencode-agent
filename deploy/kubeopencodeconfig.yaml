@@ -12,9 +12,12 @@ spec:
     imagePullPolicy: Always
 
   # Automatic cleanup of completed/failed Tasks
-  # Tasks are deleted after 1 week (604800 seconds) from completion
+  # - TTL: delete Tasks older than 2 days (172800 seconds) to prevent accumulation
+  # - Retention: keep at most 5 completed/failed Tasks per namespace, matching
+  #   CronTask.maxRetainedTasks so scheduled tasks are not blocked
   cleanup:
-    ttlSecondsAfterFinished: 604800
+    ttlSecondsAfterFinished: 172800
+    maxRetainedTasks: 5
 
   # OpenTelemetry observability
   observability:
