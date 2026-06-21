@@ -16,6 +16,5 @@ resources:
   - crontasks/crontask-pr-review.yaml
   - crontasks/crontask-tiny-refactor.yaml
   - crontasks/crontask-opencode-update.yaml
-  - crontasks/crontask-fix-vulnerabilities.yaml
   # Slack integration (opencode-slack-plugin runs inside the Agent)
   - slack-agent.yaml
